@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>__CLIENT_NAME__ — Google Ads x Shopify Performance Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1116; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+    --text:#e8eaed; --muted:#9aa3b2; --accent:#5b8cff; --accent2:#33c3a1;
+    --danger:#ff6161; --good:#33c3a1; --bad:#ff6161;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg); color:var(--text); padding:0 24px 24px 24px;
+  }
+  h1{font-size:20px; margin:0 0 4px 0; font-weight:600;}
+  .subtitle{color:var(--muted); font-size:13px; margin-bottom:16px;}
+  .sticky-header{
+    position:sticky; top:0; z-index:50; background:var(--bg);
+    padding:24px 0 16px 0; margin:0 0 4px 0;
+    border-bottom:1px solid var(--border); box-shadow:0 8px 16px -8px rgba(0,0,0,0.4);
+  }
+  .toolbar{
+    display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+    background:var(--panel); border:1px solid var(--border); border-radius:12px;
+    padding:14px 16px;
+  }
+  .preset-btn{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    padding:8px 14px; border-radius:8px; cursor:pointer; font-size:13px; transition:.15s;
+  }
+  .preset-btn:hover{border-color:var(--accent);}
+  .preset-btn.active{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .date-input{
+    background:var(--panel2); color:var(--text); border:1px solid var(--border);
+    padding:7px 10px; border-radius:8px; font-size:13px;
+  }
+  .toolbar-sep{width:1px; height:24px; background:var(--border); margin:0 4px;}
+  label.small{font-size:12px; color:var(--muted); margin-right:6px;}
+  .compare-box{display:flex; align-items:center; gap:8px; font-size:13px;}
+  .compare-box input[type=checkbox]{width:16px; height:16px; accent-color:var(--accent);}
+  .kpi-grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:12px; margin-bottom:22px;
+  }
+  .kpi-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:14px 16px;
+  }
+  .kpi-label{font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:.04em;}
+  .kpi-value{font-size:22px; font-weight:700; margin-bottom:4px;}
+  .kpi-delta{font-size:12px; font-weight:600;}
+  .kpi-delta.pos{color:var(--good);}
+  .kpi-delta.neg{color:var(--bad);}
+  .kpi-delta.flat{color:var(--muted);}
+  .section-title{font-size:15px; font-weight:600; margin:28px 0 12px 0;}
+  .section-hint{font-size:12px; color:var(--muted); margin:-8px 0 12px 0;}
+  .charts-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;}
+  .chart-card{
+    background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:16px; min-height:300px;
+  }
+  .chart-card.full{grid-column:1/-1;}
+  .chart-title{font-size:14px; font-weight:600; margin-bottom:12px;}
+  canvas{max-width:100%;}
+  table.top-products{width:100%; border-collapse:collapse; font-size:13px;}
+  table.top-products th, table.top-products td{padding:8px 10px; border-bottom:1px solid var(--border); text-align:left;}
+  table.top-products th{color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase;}
+  table.top-products th.num, table.top-products td.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .table-scroll{max-height:480px; overflow-y:auto;}
+  .empty-state{color:var(--muted); font-size:13px; line-height:1.6; padding:20px 4px;}
+  .footnote{font-size:11px; color:var(--muted); margin-top:24px; line-height:1.6;}
+  .analysis-narrative{font-size:13.5px; line-height:1.7; margin:0 0 18px 0;}
+  .analysis-subhead{font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:#9aa3b2; margin:18px 0 8px 0;}
+  .analysis-list{margin:0 0 4px 0; padding-left:20px; font-size:13.5px; line-height:1.8;}
+  .analysis-list li{margin-bottom:6px;}
+  .analysis-list.actions{list-style:decimal;}
+  .analysis-list.why{list-style:disc;}
+  .analysis-tag{display:inline-block; font-size:10.5px; font-family:-apple-system,sans-serif; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:2px 7px; border-radius:4px; margin-right:6px; vertical-align:middle;}
+  .analysis-tag.warn{background:rgba(255,97,97,.15); color:#ff9d9d;}
+  .analysis-tag.good{background:rgba(51,195,161,.15); color:#5fe0c4;}
+  @media (max-width: 900px){ .charts-grid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+
+<div class="sticky-header">
+  <h1>__CLIENT_NAME__ &mdash; Google Ads &times; Shopify Performance Dashboard</h1>
+  <div class="subtitle" id="rangeSubtitle">Loading...</div>
+
+  <div class="toolbar">
+    <button class="preset-btn" data-preset="last7">Last 7 Days</button>
+    <button class="preset-btn" data-preset="mtd">MTD</button>
+    <div class="toolbar-sep"></div>
+    <label class="small">Month</label>
+    <input type="month" id="monthPicker" class="date-input">
+    <div class="toolbar-sep"></div>
+    <label class="small">Custom</label>
+    <input type="date" id="customFrom" class="date-input">
+    <span class="small">to</span>
+    <input type="date" id="customTo" class="date-input">
+    <button class="preset-btn" id="applyCustom">Apply</button>
+    <div class="toolbar-sep"></div>
+    <div class="compare-box">
+      <input type="checkbox" id="compareToggle">
+      <label for="compareToggle">Compare to previous period</label>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-grid" id="kpiGrid"></div>
+
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Spend vs Revenue vs Google Ads Conv. Value &mdash; Day-wise Trend</div>
+    <canvas id="trendChart" height="90"></canvas>
+  </div>
+</div>
+
+<div class="section-title">Funnel (Site Sessions &rarr; Cart &rarr; Checkout &rarr; Orders)</div>
+<div class="section-hint">Sessions cover all traffic to the store (paid + organic + direct), not Google Ads clicks alone.</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Sessions &rarr; Cart Additions &rarr; Reached Checkout &rarr; Orders (Shopify)</div>
+    <div id="funnelContent"></div>
+  </div>
+</div>
+
+<div class="section-title">Campaign Performance</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Search vs Performance Max &mdash; Spend, CTR, Conv. Rate &amp; ROAS</div>
+    <div id="campaignContent"></div>
+  </div>
+</div>
+
+<div class="section-title">Top Search Keywords</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Top Keywords by Spend &mdash; Impressions, CTR, Conversions &amp; ROAS</div>
+    <div id="keywordTable"></div>
+  </div>
+</div>
+
+<div class="section-title">Products</div>
+<div class="charts-grid">
+  <div class="chart-card">
+    <div class="chart-title">Product-wise Sales (Gross Revenue, Top 10)</div>
+    <canvas id="productChart" height="220"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title">Top Products &mdash; Ad Spend, Ad ROAS &amp; Shopify Sales</div>
+    <div class="table-scroll" id="topProductsTable"></div>
+  </div>
+</div>
+
+<div class="section-title">City-wise Performance</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Search Impressions, Spend, Conversion % &amp; ROAS by City (Top 20 by Spend)</div>
+    <div id="cityContent"></div>
+  </div>
+</div>
+
+<div class="section-title">Landing Page Performance</div>
+<div class="section-hint">ROAS shown where a landing page could be matched to its product's Google Ads spend (product-level Shopping/PMax feed). Unmatched pages show sessions and conversion metrics only.</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title">Sessions &rarr; Conversion Rate &amp; ROAS by Landing Page (Top 25 by Sessions)</div>
+    <div id="landingContent"></div>
+  </div>
+</div>
+
+<div class="section-title">Last 7 Days Analysis</div>
+<div class="charts-grid">
+  <div class="chart-card full">
+    <div class="chart-title" id="analysisSubtitle">Last 7 days vs the 7 days before that</div>
+    <div class="kpi-grid" id="analysisKpiGrid" style="margin-bottom:20px;"></div>
+    <div id="analysisContent"></div>
+  </div>
+</div>
+
+<div class="footnote" style="text-align:center; font-size:12px; letter-spacing:0.04em;">
+  Kartscale | INDIA | www.kartscale.com
+</div>
+
+<script>
+__CHARTJS__
+</script>
+<script>
+const RAW = __DATA_JSON__;
+
+const dailyByDate = {};
+RAW.daily.forEach(d => dailyByDate[d.date] = d);
+const allDates = RAW.daily.map(d => d.date).sort();
+const minDate = allDates[0], maxDate = allDates[allDates.length-1];
+
+function parseDate(s){ return new Date(s+"T00:00:00Z"); }
+function fmtDate(d){ return d.toISOString().slice(0,10); }
+function addDays(d, n){ const r = new Date(d.getTime()); r.setUTCDate(r.getUTCDate()+n); return r; }
+
+function datesBetween(from, to){
+  const out = [];
+  let cur = parseDate(from);
+  const end = parseDate(to);
+  while(cur <= end){ out.push(fmtDate(cur)); cur = addDays(cur,1); }
+  return out;
+}
+
+function aggregate(from, to){
+  const days = datesBetween(from, to);
+  const agg = {spend:0, impressions:0, clicks:0, g_conversions:0, g_conv_value:0,
+               gross_revenue:0, net_revenue:0, orders:0, sessions:0, cart_sessions:0, checkout_sessions:0};
+  days.forEach(d => {
+    const r = dailyByDate[d];
+    if(!r) return;
+    agg.spend += r.spend; agg.impressions += r.impressions; agg.clicks += r.clicks;
+    agg.g_conversions += r.g_conversions; agg.g_conv_value += r.g_conv_value;
+    agg.gross_revenue += r.gross_revenue; agg.net_revenue += r.net_revenue; agg.orders += r.orders;
+    agg.sessions += r.sessions; agg.cart_sessions += r.cart_sessions; agg.checkout_sessions += r.checkout_sessions;
+  });
+  return agg;
+}
+
+function deriveMetrics(agg){
+  const roasGross = agg.spend > 0 ? agg.gross_revenue/agg.spend : 0;
+  const roasNet = agg.spend > 0 ? agg.net_revenue/agg.spend : 0;
+  const adsRoas = agg.spend > 0 ? agg.g_conv_value/agg.spend : 0;
+  const cpm = agg.impressions > 0 ? agg.spend/agg.impressions*1000 : 0;
+  const ctr = agg.impressions > 0 ? agg.clicks/agg.impressions*100 : 0;
+  const cpc = agg.clicks > 0 ? agg.spend/agg.clicks : 0;
+  const convRate = agg.clicks > 0 ? agg.g_conversions/agg.clicks*100 : 0;
+  const costPerOrder = agg.orders > 0 ? agg.spend/agg.orders : 0;
+  return {
+    roasGross, roasNet, adsRoas, cpm, ctr, cpc, convRate, costPerOrder,
+    spend: agg.spend, grossRevenue: agg.gross_revenue, netRevenue: agg.net_revenue,
+    orders: agg.orders, gConversions: agg.g_conversions, gConvValue: agg.g_conv_value,
+    impressions: agg.impressions, clicks: agg.clicks,
+    sessions: agg.sessions, cartSessions: agg.cart_sessions, checkoutSessions: agg.checkout_sessions,
+  };
+}
+
+function fmtNum(n, decimals=0){
+  return n.toLocaleString('en-IN', {maximumFractionDigits:decimals, minimumFractionDigits:decimals});
+}
+function fmtCurrency(n){ return "₹" + fmtNum(n,0); }
+function fmtPct(n){ return fmtNum(n,2) + "%"; }
+function fmtRatio(n){ return fmtNum(n,2) + "x"; }
+
+const KPI_DEFS = [
+  {key:'roasGross', label:'Blended ROAS (Gross)', fmt:fmtRatio, higherBetter:true},
+  {key:'roasNet', label:'Blended ROAS (Net)', fmt:fmtRatio, higherBetter:true},
+  {key:'adsRoas', label:'Google Ads ROAS', fmt:fmtRatio, higherBetter:true},
+  {key:'spend', label:'Spend', fmt:fmtCurrency, higherBetter:null},
+  {key:'orders', label:'Orders (Shopify)', fmt:(n)=>fmtNum(n,0), higherBetter:true},
+  {key:'grossRevenue', label:'Gross Revenue', fmt:fmtCurrency, higherBetter:true},
+  {key:'netRevenue', label:'Net Revenue', fmt:fmtCurrency, higherBetter:true},
+  {key:'gConversions', label:'Google Ads Conversions', fmt:(n)=>fmtNum(n,1), higherBetter:true},
+  {key:'gConvValue', label:'Google Ads Conv. Value', fmt:fmtCurrency, higherBetter:true},
+  {key:'ctr', label:'CTR', fmt:fmtPct, higherBetter:true},
+  {key:'cpc', label:'Avg. CPC', fmt:fmtCurrency, higherBetter:false},
+  {key:'convRate', label:'Conv. Rate (Ads)', fmt:fmtPct, higherBetter:true},
+  {key:'cpm', label:'CPM', fmt:fmtCurrency, higherBetter:false},
+  {key:'costPerOrder', label:'Cost per Order', fmt:fmtCurrency, higherBetter:false},
+];
+
+let trendChart, productChart;
+let currentFrom = null, currentTo = null;
+
+function setActivePreset(name){
+  document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+  if(name){
+    const btn = document.querySelector('.preset-btn[data-preset="'+name+'"]');
+    if(btn) btn.classList.add('active');
+  }
+}
+
+function getPriorPeriod(from, to){
+  const fromD = parseDate(from), toD = parseDate(to);
+  const lengthDays = Math.round((toD - fromD)/86400000) + 1;
+  const priorTo = addDays(fromD, -1);
+  const priorFrom = addDays(priorTo, -(lengthDays-1));
+  return {from: fmtDate(priorFrom), to: fmtDate(priorTo)};
+}
+
+function renderKPIs(from, to){
+  const compare = document.getElementById('compareToggle').checked;
+  const cur = deriveMetrics(aggregate(from, to));
+  let prev = null;
+  if(compare){
+    const p = getPriorPeriod(from, to);
+    prev = deriveMetrics(aggregate(p.from, p.to));
+  }
+  const grid = document.getElementById('kpiGrid');
+  grid.innerHTML = '';
+  KPI_DEFS.forEach(def => {
+    const card = document.createElement('div');
+    card.className = 'kpi-card';
+    let deltaHtml = '';
+    if(compare && prev){
+      const curVal = cur[def.key], prevVal = prev[def.key];
+      let deltaClass = 'flat';
+      let deltaText = 'n/a';
+      if(prevVal !== 0){
+        const pctChange = (curVal - prevVal)/Math.abs(prevVal)*100;
+        deltaText = (pctChange >= 0 ? '+' : '') + fmtNum(pctChange,1) + '% vs prev';
+        if(def.higherBetter === true) deltaClass = pctChange >= 0 ? 'pos' : 'neg';
+        else if(def.higherBetter === false) deltaClass = pctChange <= 0 ? 'pos' : 'neg';
+        else deltaClass = 'flat';
+      } else if(curVal > 0){
+        deltaText = 'new vs prev'; deltaClass = 'pos';
+      }
+      deltaHtml = '<div class="kpi-delta '+deltaClass+'">'+deltaText+'</div>';
+    }
+    card.innerHTML =
+      '<div class="kpi-label">'+def.label+'</div>' +
+      '<div class="kpi-value">'+def.fmt(cur[def.key])+'</div>' +
+      deltaHtml;
+    grid.appendChild(card);
+  });
+}
+
+function renderTrendChart(from, to){
+  const days = datesBetween(from, to);
+  const labels = days;
+  const spendData = days.map(d => (dailyByDate[d]?.spend)||0);
+  const grossData = days.map(d => (dailyByDate[d]?.gross_revenue)||0);
+  const netData = days.map(d => (dailyByDate[d]?.net_revenue)||0);
+  const gConvValData = days.map(d => (dailyByDate[d]?.g_conv_value)||0);
+
+  if(trendChart) trendChart.destroy();
+  const ctx = document.getElementById('trendChart').getContext('2d');
+  trendChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {label:'Spend', data:spendData, borderColor:'#ff6161', backgroundColor:'rgba(255,97,97,.08)', tension:.25, pointRadius:0, borderWidth:2},
+        {label:'Gross Revenue', data:grossData, borderColor:'#5b8cff', backgroundColor:'rgba(91,140,255,.08)', tension:.25, pointRadius:0, borderWidth:2},
+        {label:'Net Revenue', data:netData, borderColor:'#33c3a1', backgroundColor:'rgba(51,195,161,.08)', tension:.25, pointRadius:0, borderWidth:2},
+        {label:'Google Ads Conv. Value', data:gConvValData, borderColor:'#ffb454', backgroundColor:'rgba(255,180,84,.08)', tension:.25, pointRadius:0, borderWidth:2, borderDash:[4,3]},
+      ]
+    },
+    options: {
+      responsive:true,
+      interaction:{mode:'index', intersect:false},
+      plugins:{ legend:{labels:{color:'#e8eaed'}}, tooltip:{mode:'index', intersect:false} },
+      scales:{
+        x:{ticks:{color:'#9aa3b2', maxTicksLimit:12}, grid:{color:'#2a2f3a'}},
+        y:{ticks:{color:'#9aa3b2'}, grid:{color:'#2a2f3a'}}
+      }
+    }
+  });
+}
+
+function renderFunnel(from, to){
+  const agg = aggregate(from, to);
+  const stages = [
+    {label:'Sessions', value: agg.sessions},
+    {label:'Sessions with Cart Additions', value: agg.cart_sessions},
+    {label:'Sessions that Reached Checkout', value: agg.checkout_sessions},
+    {label:'Orders (Shopify)', value: agg.orders},
+  ];
+  const el = document.getElementById('funnelContent');
+  if(stages[0].value <= 0){
+    el.innerHTML = '<div class="empty-state">No session data in this range.</div>';
+    return;
+  }
+  const maxVal = stages[0].value;
+  let html = '<div style="display:flex; flex-direction:column; gap:10px;">';
+  stages.forEach((s, i) => {
+    const widthPct = Math.max(2, (s.value / maxVal) * 100);
+    let dropText = '';
+    if(i > 0){
+      const prev = stages[i-1].value;
+      const pct = prev > 0 ? (s.value/prev*100) : 0;
+      dropText = ' &mdash; ' + fmtNum(pct,1) + '% of ' + stages[i-1].label + ' (drop-off ' + fmtNum(100-pct,1) + '%)';
+    }
+    html += '<div>' +
+      '<div style="display:flex; justify-content:space-between; font-size:12px; color:#9aa3b2; margin-bottom:4px;">' +
+        '<span>'+s.label+dropText+'</span><span>'+fmtNum(s.value,0)+'</span>' +
+      '</div>' +
+      '<div style="background:#2a2f3a; border-radius:6px; height:22px;">' +
+        '<div style="background:#5b8cff; width:'+widthPct+'%; height:100%; border-radius:6px;"></div>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+function aggregateCampaignsByKey(days){
+  const totals = {};
+  (RAW.campaign||[]).forEach(r => {
+    if(!days.has(r.day)) return;
+    if(!totals[r.campaign]) totals[r.campaign] = {spend:0, impressions:0, clicks:0, conversions:0, conv_value:0};
+    const t = totals[r.campaign];
+    t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks;
+    t.conversions += r.conversions; t.conv_value += r.conv_value;
+  });
+  return totals;
+}
+
+function deriveCampaignMetrics(t){
+  return {
+    spend: t.spend,
+    impressions: t.impressions,
+    clicks: t.clicks,
+    ctr: t.impressions > 0 ? t.clicks/t.impressions*100 : 0,
+    cpc: t.clicks > 0 ? t.spend/t.clicks : 0,
+    conversions: t.conversions,
+    convValue: t.conv_value,
+    convRate: t.clicks > 0 ? t.conversions/t.clicks*100 : 0,
+    roas: t.spend > 0 ? t.conv_value/t.spend : 0,
+  };
+}
+
+function renderCampaignTable(from, to){
+  const el = document.getElementById('campaignContent');
+  const days = new Set(datesBetween(from, to));
+  const totals = aggregateCampaignsByKey(days);
+  const rows = Object.entries(totals).map(([name, t]) => Object.assign({name}, deriveCampaignMetrics(t)))
+    .filter(r => r.spend > 0 || r.impressions > 0)
+    .sort((a,b) => b.spend - a.spend);
+  if(rows.length === 0){
+    el.innerHTML = '<div class="empty-state">No campaign delivery in this date range.</div>';
+    return;
+  }
+  const body = rows.map(r =>
+    '<tr><td>'+r.name+'</td><td class="num">'+fmtCurrency(r.spend)+'</td><td class="num">'+fmtNum(r.impressions,0)+
+    '</td><td class="num">'+fmtNum(r.clicks,0)+'</td><td class="num">'+fmtPct(r.ctr)+'</td><td class="num">'+fmtCurrency(r.cpc)+
+    '</td><td class="num">'+fmtNum(r.conversions,1)+'</td><td class="num">'+fmtPct(r.convRate)+'</td><td class="num">'+fmtCurrency(r.convValue)+
+    '</td><td class="num">'+fmtRatio(r.roas)+'</td></tr>'
+  ).join('');
+  el.innerHTML = '<table class="top-products"><thead><tr><th>Campaign</th><th class="num">Spend</th><th class="num">Impr.</th>' +
+    '<th class="num">Clicks</th><th class="num">CTR</th><th class="num">Avg. CPC</th><th class="num">Conversions</th>' +
+    '<th class="num">Conv. Rate</th><th class="num">Conv. Value</th><th class="num">ROAS</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+
+function renderKeywordTable(from, to){
+  const el = document.getElementById('keywordTable');
+  const days = new Set(datesBetween(from, to));
+  const totals = {};
+  (RAW.keyword||[]).forEach(r => {
+    if(!days.has(r.day)) return;
+    if(!totals[r.keyword]) totals[r.keyword] = {spend:0, impressions:0, clicks:0, conversions:0, conv_value:0};
+    const t = totals[r.keyword];
+    t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks;
+    t.conversions += r.conversions; t.conv_value += r.conv_value;
+  });
+  const rows = Object.entries(totals).map(([name, t]) => Object.assign({name}, deriveCampaignMetrics(t)))
+    .filter(r => r.spend > 0 || r.impressions > 0)
+    .sort((a,b) => b.spend - a.spend)
+    .slice(0, 20);
+  if(rows.length === 0){
+    el.innerHTML = '<div class="empty-state">No keyword data in this date range.</div>';
+    return;
+  }
+  const body = rows.map(r =>
+    '<tr><td>'+r.name+'</td><td class="num">'+fmtNum(r.impressions,0)+'</td><td class="num">'+fmtNum(r.clicks,0)+
+    '</td><td class="num">'+fmtPct(r.ctr)+'</td><td class="num">'+fmtCurrency(r.spend)+'</td><td class="num">'+fmtNum(r.conversions,1)+
+    '</td><td class="num">'+fmtCurrency(r.convValue)+'</td><td class="num">'+fmtRatio(r.roas)+'</td></tr>'
+  ).join('');
+  el.innerHTML = '<table class="top-products"><thead><tr><th>Search Keyword</th><th class="num">Impr.</th><th class="num">Clicks</th>' +
+    '<th class="num">CTR</th><th class="num">Spend</th><th class="num">Conversions</th><th class="num">Conv. Value</th>' +
+    '<th class="num">ROAS</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+
+function aggregateProducts(from, to){
+  const days = new Set(datesBetween(from, to));
+  const totals = {};
+  (RAW.product||[]).forEach(r => {
+    if(!days.has(r.day)) return;
+    if(!totals[r.product]) totals[r.product] = {ad_cost:0, ad_conv_value:0, ad_conversions:0, gross:0, net:0, orders:0};
+    const t = totals[r.product];
+    t.ad_cost += r.ad_cost; t.ad_conv_value += r.ad_conv_value; t.ad_conversions += r.ad_conversions;
+    t.gross += r.gross; t.net += r.net; t.orders += r.orders;
+  });
+  return Object.entries(totals)
+    .map(([name, v]) => ({name, ...v, roas: v.ad_cost > 0 ? v.ad_conv_value/v.ad_cost : 0}))
+    .sort((a,b) => b.gross - a.gross);
+}
+
+function renderProductChart(from, to){
+  const products = aggregateProducts(from, to).slice(0, 10);
+  const labels = products.map(p => p.name.length > 28 ? p.name.slice(0,26)+'…' : p.name);
+  const values = products.map(p => p.gross);
+
+  if(productChart) productChart.destroy();
+  const ctx = document.getElementById('productChart').getContext('2d');
+  productChart = new Chart(ctx, {
+    type:'bar',
+    data:{labels, datasets:[{label:'Gross Revenue', data:values, backgroundColor:'#33c3a1', borderRadius:6}]},
+    options:{
+      indexAxis:'y',
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#9aa3b2'}, grid:{color:'#2a2f3a'}, beginAtZero:true},
+        y:{ticks:{color:'#9aa3b2'}, grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderTopProductsTable(from, to){
+  const products = aggregateProducts(from, to).slice(0, 15);
+  const el = document.getElementById('topProductsTable');
+  if(products.length === 0){
+    el.innerHTML = '<div class="empty-state">No product activity in this range.</div>';
+    return;
+  }
+  let rows = products.map((p,i) =>
+    '<tr><td>'+(i+1)+'. '+p.name+'</td><td class="num">'+fmtCurrency(p.ad_cost)+'</td><td class="num">'+fmtRatio(p.roas)+
+    '</td><td class="num">'+fmtCurrency(p.gross)+'</td><td class="num">'+fmtNum(p.orders,0)+'</td></tr>'
+  ).join('');
+  el.innerHTML =
+    '<table class="top-products"><thead><tr><th>Product</th><th class="num">Ad Spend</th><th class="num">Ad ROAS</th>' +
+    '<th class="num">Gross Rev.</th><th class="num">Orders</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function renderCityPanel(from, to){
+  const el = document.getElementById('cityContent');
+  const records = RAW.city || [];
+  if(records.length === 0){
+    el.innerHTML = '<div class="empty-state">City-level data not available.</div>';
+    return;
+  }
+  const days = new Set(datesBetween(from, to));
+  const totals = {};
+  records.forEach(r => {
+    if(!days.has(r.day)) return;
+    if(!totals[r.city]) totals[r.city] = {spend:0, impressions:0, clicks:0, conversions:0, conv_value:0};
+    const t = totals[r.city];
+    t.spend += r.spend; t.impressions += r.impressions; t.clicks += r.clicks;
+    t.conversions += r.conversions; t.conv_value += r.conv_value;
+  });
+  const rows = Object.entries(totals).map(([city, t]) => ({
+    city,
+    spend: t.spend,
+    impressions: t.impressions,
+    convRate: t.clicks > 0 ? t.conversions/t.clicks*100 : 0,
+    convValue: t.conv_value,
+    roas: t.spend > 0 ? t.conv_value/t.spend : 0,
+  })).filter(r => r.spend > 0 || r.impressions > 0)
+    .sort((a,b) => b.spend - a.spend)
+    .slice(0, 20);
+
+  if(rows.length === 0){
+    el.innerHTML = '<div class="empty-state">No city-level delivery in this date range.</div>';
+    return;
+  }
+
+  const tableBody = rows.map(r =>
+    '<tr><td>'+r.city+'</td><td class="num">'+fmtNum(r.impressions,0)+'</td><td class="num">'+fmtCurrency(r.spend)+
+    '</td><td class="num">'+fmtPct(r.convRate)+'</td><td class="num">'+fmtCurrency(r.convValue)+
+    '</td><td class="num">'+fmtRatio(r.roas)+'</td></tr>'
+  ).join('');
+
+  el.innerHTML = '<canvas id="cityChartCanvas" height="90"></canvas>' +
+    '<table class="top-products" style="margin-top:14px;"><thead><tr><th>City</th><th class="num">Search Impressions</th>' +
+    '<th class="num">Spend</th><th class="num">Conversion %</th><th class="num">Conversion Value</th>' +
+    '<th class="num">ROAS</th></tr></thead><tbody>'+tableBody+'</tbody></table>';
+
+  const ctx = document.getElementById('cityChartCanvas').getContext('2d');
+  new Chart(ctx, {
+    data: {
+      labels: rows.map(r => r.city),
+      datasets: [
+        {type:'bar', label:'Spend', data: rows.map(r=>r.spend), backgroundColor:'#ff6161', yAxisID:'y'},
+        {type:'bar', label:'Conversion Value', data: rows.map(r=>r.convValue), backgroundColor:'#33c3a1', yAxisID:'y'},
+      ]
+    },
+    options:{
+      plugins:{legend:{labels:{color:'#e8eaed'}}},
+      scales:{
+        x:{ticks:{color:'#9aa3b2'}, grid:{display:false}},
+        y:{ticks:{color:'#9aa3b2'}, grid:{color:'#2a2f3a'}, beginAtZero:true},
+      }
+    }
+  });
+}
+
+function renderLandingPanel(from, to){
+  const el = document.getElementById('landingContent');
+  const records = RAW.landing_page || [];
+  if(records.length === 0){
+    el.innerHTML = '<div class="empty-state">Landing page data not available.</div>';
+    return;
+  }
+  const days = new Set(datesBetween(from, to));
+  const totals = {};
+  records.forEach(r => {
+    if(!days.has(r.day)) return;
+    if(!totals[r.path]) totals[r.path] = {sessions:0, cart:0, checkout:0, adCost:0, adConvValue:0, hasAdMatch:false};
+    const t = totals[r.path];
+    t.sessions += r.sessions; t.cart += r.cart_sessions; t.checkout += r.checkout_sessions;
+    if(r.ad_cost !== null && r.ad_cost !== undefined){
+      t.adCost += r.ad_cost; t.adConvValue += (r.ad_conv_value||0); t.hasAdMatch = true;
+    }
+  });
+  const rows = Object.entries(totals).map(([path, t]) => ({
+    path,
+    sessions: t.sessions,
+    cartSessions: t.cart,
+    checkoutSessions: t.checkout,
+    convRate: t.sessions > 0 ? t.checkout/t.sessions*100 : 0,
+    adCost: t.hasAdMatch ? t.adCost : null,
+    roas: (t.hasAdMatch && t.adCost > 0) ? t.adConvValue/t.adCost : (t.hasAdMatch ? 0 : null),
+  })).filter(r => r.sessions > 0)
+    .sort((a,b) => b.sessions - a.sessions)
+    .slice(0, 25);
+
+  if(rows.length === 0){
+    el.innerHTML = '<div class="empty-state">No landing page sessions in this date range.</div>';
+    return;
+  }
+
+  const body = rows.map(r =>
+    '<tr><td>'+r.path+'</td><td class="num">'+fmtNum(r.sessions,0)+'</td><td class="num">'+fmtNum(r.cartSessions,0)+
+    '</td><td class="num">'+fmtNum(r.checkoutSessions,0)+'</td><td class="num">'+fmtPct(r.convRate)+
+    '</td><td class="num">'+(r.adCost!==null ? fmtCurrency(r.adCost) : '&mdash;')+
+    '</td><td class="num">'+(r.roas!==null ? fmtRatio(r.roas) : '&mdash;')+'</td></tr>'
+  ).join('');
+
+  el.innerHTML = '<table class="top-products"><thead><tr><th>Landing Page</th><th class="num">Sessions</th>' +
+    '<th class="num">Cart Additions</th><th class="num">Reached Checkout</th><th class="num">Conv. Rate</th>' +
+    '<th class="num">Matched Ad Spend</th><th class="num">Matched ROAS</th></tr></thead><tbody>'+body+'</tbody></table>';
+}
+
+// ---------------------------------------------------------------------------
+// Last 7 Days Analysis: fixed last-7-days vs prior-7-days comparison, anchored
+// to maxDate (the most recent day in the data), independent of the toolbar
+// selection above. Every figure is computed sum-then-divide, never averaged
+// from daily ratios. Diagnostics only fire on real, spend-material signal.
+// ---------------------------------------------------------------------------
+
+function pctChangeOf(cur, prev){
+  if(prev === 0) return cur > 0 ? Infinity : 0;
+  return (cur - prev) / Math.abs(prev) * 100;
+}
+
+function deltaTag(pct, higherBetter){
+  if(!isFinite(pct)) return '<span class="kpi-delta pos" style="display:inline;">new</span>';
+  const sign = pct >= 0 ? '+' : '';
+  let cls = 'flat';
+  if(higherBetter === true) cls = pct >= 0 ? 'pos' : 'neg';
+  else if(higherBetter === false) cls = pct <= 0 ? 'pos' : 'neg';
+  return '<span class="kpi-delta '+cls+'" style="display:inline;">'+sign+fmtNum(pct,1)+'%</span>';
+}
+
+function renderAnalysisSection(){
+  const kpiEl = document.getElementById('analysisKpiGrid');
+  const contentEl = document.getElementById('analysisContent');
+  const subEl = document.getElementById('analysisSubtitle');
+
+  const periodAFrom = fmtDate(addDays(parseDate(maxDate), -6));
+  const periodATo = maxDate;
+  const periodBTo = fmtDate(addDays(parseDate(periodAFrom), -1));
+  const periodBFrom = fmtDate(addDays(parseDate(periodBTo), -6));
+
+  if(parseDate(periodBFrom) < parseDate(minDate)){
+    subEl.textContent = 'Not enough history yet for a 7 vs 7 day comparison';
+    kpiEl.innerHTML = '';
+    contentEl.innerHTML = '<div class="empty-state">This account has '+allDates.length+' day(s) of data so far. A last-7-days-vs-prior-7-days comparison needs at least 14 days of history.</div>';
+    return;
+  }
+
+  subEl.textContent = periodAFrom+' to '+periodATo+'  vs  '+periodBFrom+' to '+periodBTo;
+
+  const aggA = aggregate(periodAFrom, periodATo);
+  const aggB = aggregate(periodBFrom, periodBTo);
+  const mA = deriveMetrics(aggA), mB = deriveMetrics(aggB);
+
+  const KPIS = [
+    {label:'Spend', a: mA.spend, b: mB.spend, fmt: fmtCurrency, higherBetter: null},
+    {label:'Blended ROAS (Gross)', a: mA.roasGross, b: mB.roasGross, fmt: fmtRatio, higherBetter: true},
+    {label:'Google Ads ROAS', a: mA.adsRoas, b: mB.adsRoas, fmt: fmtRatio, higherBetter: true},
+    {label:'Orders (Shopify)', a: mA.orders, b: mB.orders, fmt: n=>fmtNum(n,0), higherBetter: true},
+    {label:'Cost per Order', a: mA.costPerOrder, b: mB.costPerOrder, fmt: fmtCurrency, higherBetter: false},
+    {label:'CTR', a: mA.ctr, b: mB.ctr, fmt: fmtPct, higherBetter: true},
+    {label:'Avg. CPC', a: mA.cpc, b: mB.cpc, fmt: fmtCurrency, higherBetter: false},
+    {label:'Conv. Rate (Ads)', a: mA.convRate, b: mB.convRate, fmt: fmtPct, higherBetter: true},
+  ];
+  kpiEl.innerHTML = KPIS.map(k => {
+    const pct = pctChangeOf(k.a, k.b);
+    return '<div class="kpi-card">'+
+      '<div class="kpi-label">'+k.label+'</div>'+
+      '<div class="kpi-value">'+k.fmt(k.a)+'</div>'+
+      '<div class="kpi-delta">'+deltaTag(pct, k.higherBetter)+' vs prior 7 days ('+k.fmt(k.b)+')</div>'+
+    '</div>';
+  }).join('');
+
+  const daysA = new Set(datesBetween(periodAFrom, periodATo));
+  const daysB = new Set(datesBetween(periodBFrom, periodBTo));
+  const minSpendForNotice = Math.max(mA.spend * 0.05, 1);
+
+  const findings = [];
+
+  const campA = aggregateCampaignsByKey(daysA), campB = aggregateCampaignsByKey(daysB);
+  const campNames = new Set([...Object.keys(campA), ...Object.keys(campB)]);
+  const campRows = [...campNames].map(name => {
+    const a = deriveCampaignMetrics(campA[name] || {spend:0,impressions:0,clicks:0,conversions:0,conv_value:0});
+    const b = deriveCampaignMetrics(campB[name] || {spend:0,impressions:0,clicks:0,conversions:0,conv_value:0});
+    return {name, a, b, roasDelta: a.roas - b.roas};
+  }).filter(c => c.a.spend >= minSpendForNotice || c.b.spend >= minSpendForNotice);
+
+  const decliners = campRows.filter(c => c.b.roas > 0 && c.roasDelta < 0)
+    .sort((x,y) => (Math.abs(y.roasDelta)*y.a.spend) - (Math.abs(x.roasDelta)*x.a.spend)).slice(0,2);
+  decliners.forEach(c => {
+    findings.push({
+      severity: 'warn',
+      text: '<strong>'+c.name+'</strong> ROAS fell from '+fmtRatio(c.b.roas)+' to '+fmtRatio(c.a.roas)+' on '+fmtCurrency(c.a.spend)+' spend this week.',
+      action: 'Review <strong>'+c.name+'</strong>: its ROAS dropped '+fmtNum(Math.abs(pctChangeOf(c.a.roas,c.b.roas)),0)+'% week over week on real spend, check search terms and product bids.'
+    });
+  });
+  const improvers = campRows.filter(c => c.b.roas >= 0 && c.roasDelta > 0 && c.a.spend >= minSpendForNotice)
+    .sort((x,y) => (y.roasDelta*y.a.spend) - (x.roasDelta*x.a.spend)).slice(0,1);
+  improvers.forEach(c => {
+    findings.push({
+      severity: 'good',
+      text: '<strong>'+c.name+'</strong> improved from '+fmtRatio(c.b.roas)+' to '+fmtRatio(c.a.roas)+' ROAS on '+fmtCurrency(c.a.spend)+' spend this week.',
+      action: 'Consider increasing budget on <strong>'+c.name+'</strong>, it is the strongest ROAS mover this week.'
+    });
+  });
+
+  const kwTotalsA = {}, kwTotalsB = {};
+  (RAW.keyword||[]).forEach(r => {
+    if(daysA.has(r.day)){
+      if(!kwTotalsA[r.keyword]) kwTotalsA[r.keyword] = {spend:0, impressions:0, clicks:0, conversions:0, conv_value:0};
+      const t = kwTotalsA[r.keyword]; t.spend+=r.spend; t.impressions+=r.impressions; t.clicks+=r.clicks; t.conversions+=r.conversions; t.conv_value+=r.conv_value;
+    }
+    if(daysB.has(r.day)){
+      if(!kwTotalsB[r.keyword]) kwTotalsB[r.keyword] = {spend:0, impressions:0, clicks:0, conversions:0, conv_value:0};
+      const t = kwTotalsB[r.keyword]; t.spend+=r.spend; t.impressions+=r.impressions; t.clicks+=r.clicks; t.conversions+=r.conversions; t.conv_value+=r.conv_value;
+    }
+  });
+  const kwNames = new Set([...Object.keys(kwTotalsA), ...Object.keys(kwTotalsB)]);
+  const kwRows = [...kwNames].map(name => {
+    const a = deriveCampaignMetrics(kwTotalsA[name] || {spend:0,impressions:0,clicks:0,conversions:0,conv_value:0});
+    const b = deriveCampaignMetrics(kwTotalsB[name] || {spend:0,impressions:0,clicks:0,conversions:0,conv_value:0});
+    return {name, a, b};
+  }).filter(r => r.a.spend >= minSpendForNotice);
+  const kwFatigue = kwRows.filter(r => r.b.ctr > 0 && r.a.ctr < r.b.ctr * 0.8 && r.a.roas <= r.b.roas)
+    .sort((x,y) => y.a.spend - x.a.spend).slice(0,1);
+  kwFatigue.forEach(r => {
+    findings.push({
+      severity: 'warn',
+      text: 'Keyword <strong>"'+r.name+'"</strong> CTR fell from '+fmtPct(r.b.ctr)+' to '+fmtPct(r.a.ctr)+' and ROAS from '+fmtRatio(r.b.roas)+' to '+fmtRatio(r.a.roas)+' on '+fmtCurrency(r.a.spend)+' spend.',
+      action: 'Review ad copy and match type for <strong>"'+r.name+'"</strong>, CTR dropped '+fmtNum(Math.abs(pctChangeOf(r.a.ctr,r.b.ctr)),0)+'% week over week.'
+    });
+  });
+
+  const cartRateA = aggA.sessions > 0 ? aggA.cart_sessions/aggA.sessions*100 : 0;
+  const cartRateB = aggB.sessions > 0 ? aggB.cart_sessions/aggB.sessions*100 : 0;
+  const checkoutRateA = aggA.cart_sessions > 0 ? aggA.checkout_sessions/aggA.cart_sessions*100 : 0;
+  const checkoutRateB = aggB.cart_sessions > 0 ? aggB.checkout_sessions/aggB.cart_sessions*100 : 0;
+  if(cartRateB > 0 && cartRateA < cartRateB * 0.8 && aggA.sessions >= 50){
+    findings.push({
+      severity: 'warn',
+      text: 'Session to Add-to-Cart rate fell from '+fmtPct(cartRateB)+' to '+fmtPct(cartRateA)+', more sessions are landing without adding a product to cart.',
+      action: 'Check landing page relevance and load speed for the top-traffic pages this week, the drop suggests a landing experience issue rather than a targeting one.'
+    });
+  }
+  if(checkoutRateB > 0 && checkoutRateA < checkoutRateB * 0.8 && aggA.cart_sessions >= 10){
+    findings.push({
+      severity: 'warn',
+      text: 'Cart to Checkout rate fell from '+fmtPct(checkoutRateB)+' to '+fmtPct(checkoutRateA)+', more carts are being abandoned before checkout.',
+      action: 'Check checkout flow, payment options and shipping cost surprises, cart-to-checkout drop-off usually points to friction at checkout rather than the ads themselves.'
+    });
+  }
+
+  const cityA = {}, cityB = {};
+  (RAW.city||[]).forEach(r => {
+    if(daysA.has(r.day)){
+      if(!cityA[r.city]) cityA[r.city] = {spend:0, conv_value:0};
+      cityA[r.city].spend += r.spend; cityA[r.city].conv_value += r.conv_value;
+    }
+    if(daysB.has(r.day)){
+      if(!cityB[r.city]) cityB[r.city] = {spend:0, conv_value:0};
+      cityB[r.city].spend += r.spend; cityB[r.city].conv_value += r.conv_value;
+    }
+  });
+  const cityNames = new Set([...Object.keys(cityA), ...Object.keys(cityB)]);
+  let worstCity = null;
+  cityNames.forEach(name => {
+    const a = cityA[name] || {spend:0, conv_value:0};
+    const b = cityB[name] || {spend:0, conv_value:0};
+    if(a.spend < minSpendForNotice && b.spend < minSpendForNotice) return;
+    const roasA = a.spend>0 ? a.conv_value/a.spend : 0, roasB = b.spend>0 ? b.conv_value/b.spend : 0;
+    if(roasB > 0 && roasA < roasB * 0.75){
+      const impact = (roasB-roasA) * a.spend;
+      if(!worstCity || impact > worstCity.impact) worstCity = {name, roasA, roasB, spend:a.spend, impact};
+    }
+  });
+  if(worstCity){
+    findings.push({
+      severity: 'warn',
+      text: 'ROAS in <strong>'+worstCity.name+'</strong> fell from '+fmtRatio(worstCity.roasB)+' to '+fmtRatio(worstCity.roasA)+' on '+fmtCurrency(worstCity.spend)+' spend this week.',
+      action: 'Re-check bids and product mix for <strong>'+worstCity.name+'</strong>, or shift budget toward better-performing cities this week.'
+    });
+  }
+
+  const roasPct = pctChangeOf(mA.roasGross, mB.roasGross);
+  const spendPct = pctChangeOf(mA.spend, mB.spend);
+  const overallGood = mA.roasGross >= mB.roasGross;
+  let narrative = '<p class="analysis-narrative">';
+  if(mB.spend === 0){
+    narrative += 'There was no ad spend in the prior 7-day period to compare against. This week saw '+fmtCurrency(mA.spend)+' in spend'+(mA.roasGross>0?' at '+fmtRatio(mA.roasGross)+' blended ROAS':' with no revenue recorded yet')+'.';
+  } else {
+    narrative += 'Blended ROAS (Gross) '+(overallGood?'improved':'declined')+' from '+fmtRatio(mB.roasGross)+' to '+fmtRatio(mA.roasGross)+
+      (isFinite(roasPct) ? ' ('+(roasPct>=0?'+':'')+fmtNum(roasPct,1)+'%)' : '') +
+      ' week over week, on spend of '+fmtCurrency(mA.spend)+
+      (isFinite(spendPct) ? ' ('+(spendPct>=0?'+':'')+fmtNum(spendPct,1)+'% vs the prior week)' : '') +
+      '. Cost per order ' + (aggB.orders === 0
+        ? 'was '+fmtCurrency(mA.costPerOrder)+' this week, with no completed orders in the prior week to compare against'
+        : 'moved from '+fmtCurrency(mB.costPerOrder)+' to '+fmtCurrency(mA.costPerOrder)) +
+      '. Google Ads-reported ROAS (which tracks its own attributed conversions and will not exactly match Shopify orders) was '+fmtRatio(mA.adsRoas)+' this week vs '+fmtRatio(mB.adsRoas)+' the week before.';
+  }
+  narrative += '</p>';
+
+  let html = narrative;
+  const warnFindings = findings.filter(f => f.severity === 'warn');
+  const goodFindings = findings.filter(f => f.severity === 'good');
+
+  if(findings.length === 0){
+    html += '<div class="empty-state">No significant shifts crossed a notable threshold in either direction this week, spend, ROAS, CTR and funnel conversion all held roughly steady versus the prior 7 days.</div>';
+  } else {
+    html += '<div class="analysis-subhead">What changed and why</div>';
+    html += '<ul class="analysis-list why">' + [...warnFindings, ...goodFindings].map(f =>
+      '<li><span class="analysis-tag '+f.severity+'">'+(f.severity==='warn'?'Watch':'Working')+'</span>'+f.text+'</li>'
+    ).join('') + '</ul>';
+
+    html += '<div class="analysis-subhead">Action items</div>';
+    html += '<ol class="analysis-list actions">' + findings.map(f => '<li>'+f.action+'</li>').join('') + '</ol>';
+  }
+
+  contentEl.innerHTML = html;
+}
+
+function updateSubtitle(from, to){
+  const compare = document.getElementById('compareToggle').checked;
+  let text = 'Showing '+from+' to '+to;
+  if(compare){
+    const p = getPriorPeriod(from, to);
+    text += '  |  compared with '+p.from+' to '+p.to;
+  }
+  document.getElementById('rangeSubtitle').textContent = text;
+}
+
+function setRange(from, to){
+  currentFrom = from; currentTo = to;
+  updateSubtitle(from, to);
+  renderKPIs(from, to);
+  renderTrendChart(from, to);
+  renderFunnel(from, to);
+  renderCampaignTable(from, to);
+  renderKeywordTable(from, to);
+  renderProductChart(from, to);
+  renderTopProductsTable(from, to);
+  renderCityPanel(from, to);
+  renderLandingPanel(from, to);
+  renderAnalysisSection();
+}
+
+document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    setActivePreset(btn.dataset.preset);
+    const today = parseDate(maxDate);
+    if(btn.dataset.preset === 'last7'){
+      const from = fmtDate(addDays(today, -6));
+      setRange(from, maxDate);
+    } else if(btn.dataset.preset === 'mtd'){
+      const from = maxDate.slice(0,7)+'-01';
+      setRange(from, maxDate);
+    }
+  });
+});
+
+document.getElementById('monthPicker').addEventListener('change', (e) => {
+  setActivePreset(null);
+  const val = e.target.value;
+  if(!val) return;
+  const [y,m] = val.split('-').map(Number);
+  const from = val+'-01';
+  const lastDay = new Date(y, m, 0).getDate();
+  let to = val+'-'+String(lastDay).padStart(2,'0');
+  if(to > maxDate) to = maxDate;
+  setRange(from, to);
+});
+
+document.getElementById('applyCustom').addEventListener('click', () => {
+  setActivePreset(null);
+  const from = document.getElementById('customFrom').value;
+  const to = document.getElementById('customTo').value;
+  if(from && to) setRange(from, to);
+});
+
+document.getElementById('compareToggle').addEventListener('change', () => {
+  if(currentFrom && currentTo) setRange(currentFrom, currentTo);
+});
+
+document.getElementById('customFrom').min = minDate;
+document.getElementById('customFrom').max = maxDate;
+document.getElementById('customTo').min = minDate;
+document.getElementById('customTo').max = maxDate;
+document.getElementById('customFrom').value = minDate;
+document.getElementById('customTo').value = maxDate;
+document.getElementById('monthPicker').max = maxDate.slice(0,7);
+
+setActivePreset('mtd');
+const mtdFrom = maxDate.slice(0,7)+'-01';
+setRange(mtdFrom, maxDate);
+</script>
+</body>
+</html>
