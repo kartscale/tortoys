@@ -277,7 +277,7 @@ const KPI_DEFS = [
 ];
 
 let trendChart, productChart;
-let currentFrom = null, currentTo = null;
+let currentFrom = null, currentTo = null, currentMode = null;
 
 function setActivePreset(name){
   document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
@@ -287,8 +287,42 @@ function setActivePreset(name){
   }
 }
 
-function getPriorPeriod(from, to){
+function addMonthsUTC(date, n){
+  const y = date.getUTCFullYear();
+  const m = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const targetIndex = m + n;
+  const targetYear = y + Math.floor(targetIndex/12);
+  const targetMonth = ((targetIndex % 12) + 12) % 12;
+  const lastDayOfTargetMonth = new Date(Date.UTC(targetYear, targetMonth+1, 0)).getUTCDate();
+  const clampedDay = Math.min(day, lastDayOfTargetMonth);
+  return new Date(Date.UTC(targetYear, targetMonth, clampedDay));
+}
+
+function lastDayOfMonthUTC(date){
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth()+1, 0)).getUTCDate();
+}
+
+function getPriorPeriod(from, to, mode){
   const fromD = parseDate(from), toD = parseDate(to);
+
+  if(mode === 'mtd'){
+    // Month-to-date: compare with the same day range one calendar month earlier
+    // e.g. Aug 1-9 vs Jul 1-9
+    const priorFrom = addMonthsUTC(fromD, -1);
+    const priorTo = addMonthsUTC(toD, -1);
+    return {from: fmtDate(priorFrom), to: fmtDate(priorTo)};
+  }
+
+  if(mode === 'month'){
+    // Whole calendar month selected: compare with the entire previous calendar month
+    const priorAnchor = addMonthsUTC(fromD, -1);
+    const priorFrom = new Date(Date.UTC(priorAnchor.getUTCFullYear(), priorAnchor.getUTCMonth(), 1));
+    const priorTo = new Date(Date.UTC(priorFrom.getUTCFullYear(), priorFrom.getUTCMonth(), lastDayOfMonthUTC(priorFrom)));
+    return {from: fmtDate(priorFrom), to: fmtDate(priorTo)};
+  }
+
+  // Last 7 Days, custom ranges, and fallback: equal-length period immediately before
   const lengthDays = Math.round((toD - fromD)/86400000) + 1;
   const priorTo = addDays(fromD, -1);
   const priorFrom = addDays(priorTo, -(lengthDays-1));
@@ -300,7 +334,7 @@ function renderKPIs(from, to){
   const cur = deriveMetrics(aggregate(from, to));
   let prev = null;
   if(compare){
-    const p = getPriorPeriod(from, to);
+    const p = getPriorPeriod(from, to, currentMode);
     prev = deriveMetrics(aggregate(p.from, p.to));
   }
   const grid = document.getElementById('kpiGrid');
@@ -853,14 +887,19 @@ function updateSubtitle(from, to){
   const compare = document.getElementById('compareToggle').checked;
   let text = 'Showing '+from+' to '+to;
   if(compare){
-    const p = getPriorPeriod(from, to);
-    text += '  |  compared with '+p.from+' to '+p.to;
+    const p = getPriorPeriod(from, to, currentMode);
+    let label = 'compared with';
+    if(currentMode === 'mtd') label = 'compared with same period last month';
+    else if(currentMode === 'month') label = 'compared with previous month';
+    else if(currentMode === 'last7') label = 'compared with previous 7 days';
+    text += '  |  '+label+' ('+p.from+' to '+p.to+')';
   }
   document.getElementById('rangeSubtitle').textContent = text;
 }
 
-function setRange(from, to){
+function setRange(from, to, mode){
   currentFrom = from; currentTo = to;
+  if(mode !== undefined) currentMode = mode;
   updateSubtitle(from, to);
   renderKPIs(from, to);
   renderTrendChart(from, to);
@@ -880,10 +919,10 @@ document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
     const today = parseDate(maxDate);
     if(btn.dataset.preset === 'last7'){
       const from = fmtDate(addDays(today, -6));
-      setRange(from, maxDate);
+      setRange(from, maxDate, 'last7');
     } else if(btn.dataset.preset === 'mtd'){
       const from = maxDate.slice(0,7)+'-01';
-      setRange(from, maxDate);
+      setRange(from, maxDate, 'mtd');
     }
   });
 });
@@ -897,18 +936,18 @@ document.getElementById('monthPicker').addEventListener('change', (e) => {
   const lastDay = new Date(y, m, 0).getDate();
   let to = val+'-'+String(lastDay).padStart(2,'0');
   if(to > maxDate) to = maxDate;
-  setRange(from, to);
+  setRange(from, to, 'month');
 });
 
 document.getElementById('applyCustom').addEventListener('click', () => {
   setActivePreset(null);
   const from = document.getElementById('customFrom').value;
   const to = document.getElementById('customTo').value;
-  if(from && to) setRange(from, to);
+  if(from && to) setRange(from, to, 'custom');
 });
 
 document.getElementById('compareToggle').addEventListener('change', () => {
-  if(currentFrom && currentTo) setRange(currentFrom, currentTo);
+  if(currentFrom && currentTo) setRange(currentFrom, currentTo, currentMode);
 });
 
 document.getElementById('customFrom').min = minDate;
@@ -921,7 +960,7 @@ document.getElementById('monthPicker').max = maxDate.slice(0,7);
 
 setActivePreset('mtd');
 const mtdFrom = maxDate.slice(0,7)+'-01';
-setRange(mtdFrom, maxDate);
+setRange(mtdFrom, maxDate, 'mtd');
 </script>
 </body>
 </html>
